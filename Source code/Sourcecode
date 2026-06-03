@@ -1,0 +1,164 @@
+# ============================
+# Step 1: Extract Dataset
+# ============================
+
+import zipfile
+
+with zipfile.ZipFile('Hand gesture.zip', 'r') as zip_ref:
+    zip_ref.extractall('/content/')
+
+
+# ============================
+# Step 2: Load Dataset
+# ============================
+
+import tensorflow as tf
+
+IMG_SIZE = 128
+BATCH_SIZE = 32
+
+train_ds = tf.keras.utils.image_dataset_from_directory(
+    "/content/Hand gesture",
+    validation_split=0.2,
+    subset="training",
+    seed=42,
+    image_size=(IMG_SIZE, IMG_SIZE),
+    batch_size=BATCH_SIZE
+)
+
+val_ds = tf.keras.utils.image_dataset_from_directory(
+    "/content/Hand gesture",
+    validation_split=0.2,
+    subset="validation",
+    seed=42,
+    image_size=(IMG_SIZE, IMG_SIZE),
+    batch_size=BATCH_SIZE
+)
+
+print("Classes:", train_ds.class_names)
+
+
+# ============================
+# Step 3: Build CNN Model
+# ============================
+
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Rescaling
+from tensorflow.keras.layers import Conv2D, MaxPooling2D
+from tensorflow.keras.layers import Flatten, Dense, Dropout
+
+model = Sequential([
+    Rescaling(1./255, input_shape=(128,128,3)),
+
+    Conv2D(32, (3,3), activation='relu'),
+    MaxPooling2D(),
+
+    Conv2D(64, (3,3), activation='relu'),
+    MaxPooling2D(),
+
+    Conv2D(128, (3,3), activation='relu'),
+    MaxPooling2D(),
+
+    Flatten(),
+
+    Dense(128, activation='relu'),
+    Dropout(0.5),
+
+    Dense(len(train_ds.class_names), activation='softmax')
+])
+
+
+# ============================
+# Step 4: Compile Model
+# ============================
+
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+
+# ============================
+# Step 5: Train Model
+# ============================
+
+history = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=20
+)
+
+
+# ============================
+# Step 6: Evaluate Model
+# ============================
+
+loss, accuracy = model.evaluate(val_ds)
+
+print("Validation Accuracy:", accuracy)
+
+
+# ============================
+# Step 7: Save Model
+# ============================
+
+model.save("hand_gesture_model.h5")
+
+
+# ============================
+# Step 8: Upload Test Image
+# ============================
+
+from google.colab import files
+from tensorflow.keras.preprocessing import image
+import matplotlib.pyplot as plt
+import numpy as np
+
+uploaded = files.upload()
+
+img_path = list(uploaded.keys())[0]
+
+
+# ============================
+# Step 9: Load and Display Image
+# ============================
+
+img = image.load_img(img_path, target_size=(128,128))
+
+plt.imshow(img)
+plt.axis('off')
+plt.show()
+
+
+# ============================
+# Step 10: Preprocess Image
+# ============================
+
+img_array = image.img_to_array(img)
+img_array = np.expand_dims(img_array, axis=0)
+
+
+# ============================
+# Step 11: Predict Gesture
+# ============================
+
+prediction = model.predict(img_array, verbose=0)[0]
+
+class_names = train_ds.class_names
+
+predicted_class = class_names[np.argmax(prediction)]
+confidence = np.max(prediction) * 100
+
+
+# ============================
+# Step 12: Display Results
+# ============================
+
+print("Predicted Gesture:", predicted_class)
+print(f"Confidence: {confidence:.2f}%")
+
+print("\nAll Class Probabilities:")
+
+for cls, prob in zip(class_names, prediction):
+    print(f"{cls}: {prob*100:.2f}%")
